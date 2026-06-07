@@ -1,0 +1,25 @@
+# Core data stack
+pandas>=2.0
+numpy>=1.24
+
+# Visualisation
+matplotlib>=3.7
+seaborn>=0.12
+
+# Statistical & classical forecasting
+statsmodels>=0.14
+prophet>=1.1
+
+# Machine learning
+scikit-learn>=1.3
+xgboost>=2.0
+
+# Deep learning & LLM backbone
+torch>=2.0
+transformers>=4.35
+
+# Commercial LLM (Azure OpenAI)
+openai>=1.0
+
+# Hyperparameter optimisation
+optuna>=3.4
