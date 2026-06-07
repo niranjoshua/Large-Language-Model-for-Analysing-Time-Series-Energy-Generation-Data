@@ -67,21 +67,21 @@ The central finding is that **LLMs can benefit energy forecasting when adapted t
 ## Models Evaluated
 
 ### Statistical Baselines
-- **Naive Persistence** — repeats the most recent 24h load profile
-- **ETS (Holt-Winters)** — exponential smoothing with additive trend and daily seasonality
-- **ARIMA** — autoregressive model with AIC-based order selection
-- **Prophet** — Facebook's additive regression model with daily/weekly seasonality
+- **Naive Persistence**: repeats the most recent 24h load profile
+- **ETS (Holt-Winters)**: exponential smoothing with additive trend and daily seasonality
+- **ARIMA**: autoregressive model with AIC-based order selection
+- **Prophet**: Facebook's additive regression model with daily/weekly seasonality
 
 ### Machine Learning
-- **XGBoost** — gradient-boosted trees with engineered calendar, lag, and rolling features
+- **XGBoost**: gradient-boosted trees with engineered calendar, lag, and rolling features
 
 ### Deep Learning
-- **LSTM** — 2-layer LSTM (128 units) with 168h lookback window
+- **LSTM**: 2-layer LSTM (128 units) with 168h lookback window
 
 ### LLM-Based
-- **Time-LLM** — frozen GPT-2 backbone (124M params) with learnable reprogramming layer (~2M trainable params); adapts pre-trained representations for time-series via cross-attention with prompt prototypes ([Jin et al., 2024, ICLR](https://arxiv.org/abs/2310.01728))
-- **GPT-4o Zero-Shot** — direct numerical forecasting via natural language prompts
-- **GPT-4o Few-Shot** — zero-shot plus 3 validation-set examples for in-context learning
+- **Time-LLM**: frozen GPT-2 backbone (124M params) with learnable reprogramming layer (~2M trainable params); adapts pre-trained representations for time-series via cross-attention with prompt prototypes ([Jin et al., 2024, ICLR](https://arxiv.org/abs/2310.01728))
+- **GPT-4o Zero-Shot**: direct numerical forecasting via natural language prompts
+- **GPT-4o Few-Shot**: zero-shot plus 3 validation-set examples for in-context learning
 
 ### Ensemble & Tuning
 - **Hyperparameter tuning** via Optuna (XGBoost, LSTM) and grid search (Prophet)
