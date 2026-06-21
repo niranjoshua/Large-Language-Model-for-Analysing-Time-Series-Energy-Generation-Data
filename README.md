@@ -186,7 +186,6 @@ If you use this work, please cite:
   year      = {2025},
   school    = {University of Hull},
   programme = {MSc Artificial Intelligence for Engineering},
-  note      = {Student ID: 202447778}
 }
 ```
 
