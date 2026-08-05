@@ -16,6 +16,7 @@ env/
 .mypy_cache/
 .ruff_cache/
 .coverage
+coverage.xml
 htmlcov/
 
 # uv
@@ -23,9 +24,27 @@ htmlcov/
 
 # Secrets and local data. Never commit operator data or credentials.
 .env
+.env.*
+!.env.example
 *.duckdb
 data/
 mlruns/
+*.log
+logs/
+
+# Model artifacts and large binaries (track these with a model registry, not git)
+*.pkl
+*.joblib
+*.onnx
+artifacts/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Future web frontend
+node_modules/
+.next/
+dist-web/
 
 # OS / editor
 .DS_Store
