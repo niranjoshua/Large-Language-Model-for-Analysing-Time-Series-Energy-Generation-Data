@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vaticore — probabilistic load & solar forecasting</title>
+<meta name="description" content="Vaticore forecasts electricity demand and solar generation for mini-grid and C&I solar operators, and turns the forecast into a battery and generator advisory." />
+</head>
+<body>
+<style>
+  :root {
+    --ground: #0b1220;
+    --surface: #131c2e;
+    --surface-2: #1b2740;
+    --line: #26324c;
+    --ink: #eaf0f7;
+    --ink-soft: #9db0c7;
+    --ink-faint: #6b7d97;
+    --amber: #f5a524;
+    --amber-soft: #f7b955;
+    --cyan: #4bd6c9;
+    --band: rgba(75, 214, 201, 0.16);
+    --good: #56d364;
+    --shadow: 0 20px 60px -30px rgba(0, 0, 0, 0.7);
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Roboto Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --ground: #f6f8fc;
+      --surface: #ffffff;
+      --surface-2: #eef2f8;
+      --line: #dde4ef;
+      --ink: #0b1220;
+      --ink-soft: #4a5a72;
+      --ink-faint: #7f8ea6;
+      --amber: #d9820a;
+      --amber-soft: #b96c05;
+      --cyan: #0f9c8d;
+      --band: rgba(15, 156, 141, 0.13);
+      --shadow: 0 24px 60px -34px rgba(20, 40, 80, 0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0b1220; --surface: #131c2e; --surface-2: #1b2740; --line: #26324c;
+    --ink: #eaf0f7; --ink-soft: #9db0c7; --ink-faint: #6b7d97;
+    --amber: #f5a524; --amber-soft: #f7b955; --cyan: #4bd6c9; --band: rgba(75,214,201,0.16);
+    --shadow: 0 20px 60px -30px rgba(0,0,0,0.7);
+  }
+  :root[data-theme="light"] {
+    --ground: #f6f8fc; --surface: #ffffff; --surface-2: #eef2f8; --line: #dde4ef;
+    --ink: #0b1220; --ink-soft: #4a5a72; --ink-faint: #7f8ea6;
+    --amber: #d9820a; --amber-soft: #b96c05; --cyan: #0f9c8d; --band: rgba(15,156,141,0.13);
+    --shadow: 0 24px 60px -34px rgba(20,40,80,0.35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+  a { color: inherit; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--amber);
+    margin: 0 0 18px;
+  }
+  h1, h2, h3 { text-wrap: balance; margin: 0; }
+
+  /* Nav */
+  nav {
+    position: sticky; top: 0; z-index: 20;
+    background: color-mix(in srgb, var(--ground) 82%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  .nav-in { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 11px; font-weight: 650; letter-spacing: -0.01em; }
+  .mark { width: 26px; height: 26px; flex: none; }
+  .nav-links { display: flex; align-items: center; gap: 28px; font-size: 14px; color: var(--ink-soft); }
+  .nav-links a { text-decoration: none; }
+  .nav-links a:hover { color: var(--ink); }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: var(--sans); font-size: 14px; font-weight: 600;
+    padding: 10px 18px; border-radius: 8px; text-decoration: none;
+    border: 1px solid transparent; cursor: pointer; transition: transform .15s ease, background .15s ease;
+  }
+  .btn-primary { background: var(--amber); color: #1a1205; }
+  .btn-primary:hover { transform: translateY(-1px); background: var(--amber-soft); }
+  .btn-ghost { border-color: var(--line); color: var(--ink); background: transparent; }
+  .btn-ghost:hover { border-color: var(--ink-faint); }
+  .nav-cta { display: none; }
+  @media (min-width: 720px) { .nav-cta { display: inline-flex; } }
+
+  /* Hero */
+  .hero { padding: 72px 0 40px; }
+  .hero-grid { display: grid; grid-template-columns: 1fr; gap: 44px; align-items: center; }
+  @media (min-width: 940px) { .hero-grid { grid-template-columns: 1.02fr 1.15fr; gap: 56px; } }
+  h1 { font-size: clamp(2.3rem, 5.2vw, 3.6rem); line-height: 1.04; letter-spacing: -0.02em; font-weight: 680; }
+  h1 .accent { color: var(--amber); }
+  .lede { font-size: clamp(1.05rem, 1.6vw, 1.2rem); color: var(--ink-soft); margin: 22px 0 30px; max-width: 40ch; }
+  .hero-cta { display: flex; flex-wrap: wrap; gap: 12px; }
+  .hero-note { margin-top: 20px; font-family: var(--mono); font-size: 12px; color: var(--ink-faint); letter-spacing: 0.02em; }
+
+  /* Chart card */
+  .chart-card {
+    background: linear-gradient(180deg, var(--surface) 0%, var(--surface-2) 100%);
+    border: 1px solid var(--line); border-radius: 16px; padding: 18px 18px 12px;
+    box-shadow: var(--shadow);
+  }
+  .chart-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
+  .chart-title { font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.04em; color: var(--ink-soft); }
+  .chart-title b { color: var(--ink); font-weight: 600; }
+  .legend { display: flex; gap: 16px; font-family: var(--mono); font-size: 11px; color: var(--ink-faint); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+  .sw-actual { background: var(--ink); }
+  .sw-fc { background: var(--cyan); }
+  .sw-band { background: var(--band); height: 10px; border: 1px solid color-mix(in srgb, var(--cyan) 40%, transparent); }
+  canvas { width: 100%; height: 300px; display: block; }
+
+  /* Stat strip */
+  .stats { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px 0; padding: 8px 0; }
+  @media (min-width: 780px) { .stats-grid { grid-template-columns: repeat(4, 1fr); } }
+  .stat { padding: 22px 8px; }
+  .stat .n { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: clamp(1.9rem, 3vw, 2.5rem); font-weight: 600; letter-spacing: -0.02em; color: var(--ink); }
+  .stat .n .u { color: var(--amber); }
+  .stat .l { font-size: 13px; color: var(--ink-soft); margin-top: 4px; }
+
+  /* Sections */
+  section { padding: 84px 0; }
+  .sec-head { max-width: 60ch; margin-bottom: 44px; }
+  h2 { font-size: clamp(1.7rem, 3vw, 2.3rem); letter-spacing: -0.015em; font-weight: 660; }
+  .sec-head p { color: var(--ink-soft); font-size: 1.05rem; margin: 14px 0 0; }
+
+  .cards { display: grid; grid-template-columns: 1fr; gap: 18px; }
+  @media (min-width: 820px) { .cards { grid-template-columns: repeat(3, 1fr); } }
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+    padding: 26px 24px; position: relative; overflow: hidden;
+  }
+  .card::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px;
+    background: linear-gradient(90deg, transparent, var(--cyan), var(--amber));
+    opacity: .0; transition: opacity .25s ease;
+  }
+  .card:hover::after { opacity: .8; }
+  .card .idx { font-family: var(--mono); font-size: 12px; color: var(--amber); letter-spacing: 0.08em; }
+  .card h3 { font-size: 1.2rem; margin: 12px 0 10px; letter-spacing: -0.01em; }
+  .card p { color: var(--ink-soft); font-size: 0.97rem; margin: 0; }
+
+  /* Pipeline */
+  .pipe { display: grid; grid-template-columns: 1fr; gap: 14px; }
+  @media (min-width: 860px) { .pipe { grid-template-columns: repeat(3, 1fr); } }
+  .step {
+    display: flex; gap: 16px; align-items: flex-start;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px;
+  }
+  .step .k { font-family: var(--mono); font-size: 12px; color: var(--ground); background: var(--amber); width: 26px; height: 26px; flex: none; border-radius: 7px; display: grid; place-items: center; font-weight: 700; }
+  .step h4 { margin: 0 0 5px; font-size: 1rem; }
+  .step p { margin: 0; color: var(--ink-soft); font-size: 0.92rem; }
+
+  .who { display: grid; grid-template-columns: 1fr; gap: 18px; }
+  @media (min-width: 760px) { .who { grid-template-columns: 1fr 1fr; } }
+  .who .card p .tag { display: inline-block; font-family: var(--mono); font-size: 11px; color: var(--cyan); letter-spacing: 0.06em; margin-bottom: 8px; }
+
+  /* CTA */
+  .cta {
+    background: linear-gradient(135deg, var(--surface-2), var(--surface));
+    border: 1px solid var(--line); border-radius: 20px; padding: 56px 40px; text-align: center;
+    box-shadow: var(--shadow);
+  }
+  .cta h2 { margin-bottom: 14px; }
+  .cta p { color: var(--ink-soft); max-width: 52ch; margin: 0 auto 28px; }
+  .cta .hero-cta { justify-content: center; }
+
+  footer { border-top: 1px solid var(--line); padding: 34px 0 60px; color: var(--ink-faint); font-size: 13px; }
+  .foot-in { display: flex; flex-wrap: wrap; gap: 12px 28px; align-items: center; justify-content: space-between; }
+  .foot-note { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.02em; }
+
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<nav>
+  <div class="wrap nav-in">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <rect x="1" y="1" width="30" height="30" rx="8" fill="var(--surface-2)" stroke="var(--line)"/>
+        <path d="M5 21 L11 21 L15 9 L19 25 L23 15 L27 15" stroke="var(--amber)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>Vaticore</span>
+    </div>
+    <div class="nav-links">
+      <a href="#product">Product</a>
+      <a href="#proof">Evidence</a>
+      <a href="#who">Who it's for</a>
+      <a class="btn btn-primary nav-cta" href="#contact">Request a pilot</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <p class="eyebrow">Probabilistic energy forecasting</p>
+      <h1>Know your <span class="accent">load and solar</span> before the sun sets.</h1>
+      <p class="lede">
+        Vaticore forecasts electricity demand and solar generation for mini-grid and
+        commercial solar operators, then turns the forecast into a clear call: how much
+        battery to hold back, and when to run the generator.
+      </p>
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="#contact">Request a pilot</a>
+        <a class="btn btn-ghost" href="#product">See how it works</a>
+      </div>
+      <p class="hero-note">// forecasts are ranges, not guesses &mdash; P10 to P90, not a single line</p>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-head">
+        <div class="chart-title"><b>Ikeja mini-grid</b> &middot; load, next 24h</div>
+        <div class="legend">
+          <span><i class="swatch sw-actual"></i>actual</span>
+          <span><i class="swatch sw-fc"></i>forecast</span>
+          <span><i class="swatch sw-band"></i>P10&ndash;P90</span>
+        </div>
+      </div>
+      <canvas id="forecastChart" aria-label="A load forecast with a P10 to P90 uncertainty band"></canvas>
+    </div>
+  </div>
+</header>
+
+<div class="stats">
+  <div class="wrap stats-grid">
+    <div class="stat">
+      <div class="n">40<span class="u">%</span></div>
+      <div class="l">lower forecast error than the standard baseline, in backtests</div>
+    </div>
+    <div class="stat">
+      <div class="n">P10&ndash;P90</div>
+      <div class="l">calibrated uncertainty on every forecast</div>
+    </div>
+    <div class="stat">
+      <div class="n">24<span class="u">h</span></div>
+      <div class="l">ahead, at hourly resolution and finer</div>
+    </div>
+    <div class="stat">
+      <div class="n">2</div>
+      <div class="l">targets per site: demand and solar generation</div>
+    </div>
+  </div>
+</div>
+
+<section id="product">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">What it does</p>
+      <h2>A forecast is only useful if you can trust it and act on it.</h2>
+      <p>So Vaticore is built around three things: honest uncertainty, honest evaluation, and a decision at the end.</p>
+    </div>
+    <div class="cards">
+      <div class="card">
+        <div class="idx">01 / forecast</div>
+        <h3>Probabilistic by default</h3>
+        <p>Every forecast is a range, not a single number. You see the likely case and the bad case, because a battery sized for the average day fails on the worst one.</p>
+      </div>
+      <div class="card">
+        <div class="idx">02 / evaluate</div>
+        <h3>Measured against a baseline</h3>
+        <p>Every model is backtested on held-out history and scored against a naive baseline. If it cannot beat &ldquo;same as yesterday,&rdquo; it does not ship. No cherry-picked numbers.</p>
+      </div>
+      <div class="card">
+        <div class="idx">03 / decide</div>
+        <h3>Answers, not just charts</h3>
+        <p>The forecast becomes an operational call: recommended battery reserve and whether to plan generator runtime over the next window. Advisory only, never automatic control.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="proof" style="background: var(--surface);">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Evidence</p>
+      <h2>Built to survive due diligence.</h2>
+      <p>The engine is a probabilistic gradient-boosting model, evaluated with rolling-origin backtests and scored on pinball loss &mdash; the metric that rewards well-calibrated ranges, not just a good average.</p>
+    </div>
+    <div class="pipe">
+      <div class="step"><div class="k">1</div><div><h4>Ingest messy data</h4><p>Validated schema, timezone normalisation, gap detection. Built for sparse, imperfect operator feeds.</p></div></div>
+      <div class="step"><div class="k">2</div><div><h4>Forecast with weather</h4><p>Calendar and lag features plus live weather from Open-Meteo drive per-site load and solar forecasts.</p></div></div>
+      <div class="step"><div class="k">3</div><div><h4>Score honestly</h4><p>Rolling-origin backtest against persistence on every run, so accuracy claims are reproducible.</p></div></div>
+    </div>
+    <p class="hero-note" style="margin-top:22px">// current results are from backtests on benchmark and real solar-resource data; pilot data replaces them site by site</p>
+  </div>
+</section>
+
+<section id="who">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Who it's for</p>
+      <h2>Operators running power where the grid is thin.</h2>
+    </div>
+    <div class="who">
+      <div class="card">
+        <p><span class="tag">MINI-GRID OPERATORS</span></p>
+        <h3>Serve demand without over-burning diesel</h3>
+        <p>Know tomorrow's load and solar so you hold the right battery reserve and schedule the generator deliberately, not reactively. Fewer litres, fewer blackouts.</p>
+      </div>
+      <div class="card">
+        <p><span class="tag">C&amp;I SOLAR</span></p>
+        <h3>Turn solar variability into a plan</h3>
+        <p>Forecast on-site generation against building load so commercial and industrial sites plan around cloud cover instead of being surprised by it.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="contact">
+  <div class="wrap">
+    <div class="cta">
+      <p class="eyebrow" style="color:var(--cyan)">Design partners wanted</p>
+      <h2>Run a free pilot on your site.</h2>
+      <p>Share six to twelve months of meter or inverter history, and we will forecast your load and solar and show you the battery and generator advisory &mdash; measured against your own baseline.</p>
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="mailto:adewumiadeniran224@gmail.com?subject=Vaticore%20pilot">Start a pilot conversation</a>
+        <a class="btn btn-ghost" href="mailto:adewumiadeniran224@gmail.com">Email us</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot-in">
+    <div class="brand" style="font-size:15px"><span>Vaticore</span></div>
+    <div class="foot-note">Probabilistic load &amp; solar forecasting &middot; advisory only, never closed-loop control</div>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    var canvas = document.getElementById("forecastChart");
+    if (!canvas) return;
+    var ctx = canvas.getContext("2d");
+    var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    function css(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+    // Deterministic synthetic series: daily load shape + gentle noise.
+    var N = 96;              // 4 days hourly
+    var split = 66;          // "now" divider index
+    var hist = [], med = [], lo = [], hi = [];
+    var seed = 7;
+    function rnd() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
+    for (var i = 0; i < N; i++) {
+      var h = i % 24;
+      var base = 0.5 + 0.32 * Math.sin((h - 6) / 24 * Math.PI * 2);
+      hist.push(base + (rnd() - 0.5) * 0.06);
+      var spread = 0.03 + 0.11 * Math.max(0, (i - split) / (N - split)); // widens into the future
+      med.push(base);
+      lo.push(base - spread);
+      hi.push(base + spread);
+    }
+
+    var W, H, dpr;
+    function resize() {
+      dpr = window.devicePixelRatio || 1;
+      W = canvas.clientWidth; H = canvas.clientHeight;
+      canvas.width = W * dpr; canvas.height = H * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    var padL = 8, padR = 8, padT = 14, padB = 20;
+    function x(i) { return padL + (i / (N - 1)) * (W - padL - padR); }
+    function y(v) { return padT + (1 - (v - 0.1) / 0.85) * (H - padT - padB); }
+
+    function draw(progress) {
+      ctx.clearRect(0, 0, W, H);
+      var cyan = css("--cyan"), ink = css("--ink"), amber = css("--amber");
+      var faint = css("--ink-faint"), band = css("--band");
+      var shown = Math.floor(split + (N - split) * progress);
+
+      // faint horizontal grid
+      ctx.strokeStyle = css("--line"); ctx.lineWidth = 1;
+      for (var g = 0; g <= 3; g++) {
+        var gy = padT + g / 3 * (H - padT - padB);
+        ctx.beginPath(); ctx.moveTo(padL, gy); ctx.lineTo(W - padR, gy); ctx.stroke();
+      }
+
+      // uncertainty band (forecast region only)
+      ctx.beginPath();
+      for (var a = split; a <= shown; a++) ctx.lineTo(x(a), y(hi[a]));
+      for (var b = shown; b >= split; b--) ctx.lineTo(x(b), y(lo[b]));
+      ctx.closePath();
+      ctx.fillStyle = band; ctx.fill();
+
+      // history (actual) line
+      ctx.strokeStyle = ink; ctx.lineWidth = 2; ctx.lineJoin = "round";
+      ctx.beginPath();
+      for (var c = 0; c <= split; c++) { var px = x(c), py = y(hist[c]); c === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py); }
+      ctx.stroke();
+
+      // "now" divider
+      ctx.strokeStyle = faint; ctx.setLineDash([3, 4]); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x(split), padT); ctx.lineTo(x(split), H - padB); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = faint; ctx.font = "11px ui-monospace, monospace"; ctx.textAlign = "center";
+      ctx.fillText("now", x(split), H - 6);
+
+      // forecast median (dashed)
+      ctx.strokeStyle = cyan; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      for (var d = split; d <= shown; d++) { var qx = x(d), qy = y(med[d]); d === split ? ctx.moveTo(qx, qy) : ctx.lineTo(qx, qy); }
+      ctx.stroke(); ctx.setLineDash([]);
+
+      // leading dot
+      if (shown >= split) {
+        ctx.fillStyle = amber;
+        ctx.beginPath(); ctx.arc(x(shown), y(med[shown]), 3.4, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+
+    var start = null, DUR = 1400;
+    function frame(t) {
+      if (start === null) start = t;
+      var p = Math.min(1, (t - start) / DUR);
+      var eased = 1 - Math.pow(1 - p, 3);
+      draw(eased);
+      if (p < 1) requestAnimationFrame(frame);
+    }
+    function run() { resize(); if (reduce) { draw(1); } else { start = null; requestAnimationFrame(frame); } }
+
+    run();
+    var rt;
+    window.addEventListener("resize", function () { clearTimeout(rt); rt = setTimeout(function () { resize(); draw(1); }, 120); });
+  })();
+</script>
+
+</body>
+</html>

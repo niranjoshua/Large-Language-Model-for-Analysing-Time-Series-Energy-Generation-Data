@@ -1,0 +1,33 @@
+# Local full stack: the API plus a TimescaleDB (Postgres) database.
+# Usage:  docker compose up --build
+# The API comes up on http://localhost:8000 (docs at /docs).
+services:
+  db:
+    image: timescale/timescaledb:latest-pg16
+    environment:
+      POSTGRES_USER: vaticore
+      POSTGRES_PASSWORD: vaticore
+      POSTGRES_DB: vaticore
+    ports:
+      - "5432:5432"
+    volumes:
+      - vaticore_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vaticore"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      VATICORE_ENVIRONMENT: local
+      VATICORE_DATABASE_URL: postgresql://vaticore:vaticore@db:5432/vaticore
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  vaticore_db:

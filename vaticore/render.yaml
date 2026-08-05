@@ -1,0 +1,18 @@
+# Render blueprint. Push this repo, then in Render: New > Blueprint, point it here.
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: vaticore-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: VATICORE_ENVIRONMENT
+        value: production
+      # Set secrets in the Render dashboard, not here:
+      #   VATICORE_DATABASE_URL, ANTHROPIC_API_KEY
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: VATICORE_DATABASE_URL
+        sync: false

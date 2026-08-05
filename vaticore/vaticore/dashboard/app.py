@@ -123,7 +123,13 @@ def main() -> None:
         st.metric("Genset needed", "Yes" if advisory.genset_recommended else "No")
         st.metric("Recommended reserve", f"{advisory.recommended_reserve_kwh:.0f} kWh")
         st.metric("Expected net load", f"{advisory.expected_net_load_kwh:.0f} kWh")
-        st.caption(advisory.note)
+        # Plain-language explanation. Uses the LLM when ANTHROPIC_API_KEY is set,
+        # otherwise a deterministic template. Never blocks the numbers above.
+        from vaticore.copilot import explain_advisory
+
+        explanation = explain_advisory(advisory)
+        st.info(explanation.text)
+        st.caption(f"Explanation source: {explanation.generated_by}")
 
     st.subheader("Backtest vs persistence baseline")
     st.caption(

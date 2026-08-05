@@ -24,13 +24,17 @@ Working end to end, with a real forecasting model, an API and a dashboard.
   quantile GBM cuts pinball loss by roughly **40% on load** and **18% on solar
   generation** versus the baseline.
 - **Decisions**: battery reserve and genset advisory from the quantile forecast.
-- **Surfaces**: a FastAPI service and a Streamlit dashboard, both driven by one
-  engine facade so they never disagree.
+- **Weather**: a real Open-Meteo client (no API key) feeding weather features.
+- **Copilot**: an optional LLM layer that explains an advisory in plain language,
+  grounded on the engine's numbers, with a deterministic template fallback.
+- **Surfaces**: a FastAPI service, a Streamlit dashboard, and a static landing
+  page, all driven by one engine facade so they never disagree.
+- **Ops**: Dockerfile, docker-compose (with TimescaleDB), and a Render blueprint
+  (`DEPLOY.md`).
 
-Next: weather enrichment (Open-Meteo), a persistent multi tenant store, model
-tracking (MLflow), and an optional LLM explainability layer on top of the
-numeric core. LSTM, TIME-LLM and an ensemble remain stubbed against the
-interface.
+Next: a persistent multi tenant store wired to the API, model tracking (MLflow),
+and integrating weather features into the model. LSTM, TIME-LLM and an ensemble
+remain stubbed against the interface.
 
 ## Layout
 
@@ -43,12 +47,15 @@ vaticore/
   decisions/     # forecast -> battery reserve / genset advisory / unserved energy
   api/           # FastAPI service (thin handlers over the engine)
   dashboard/     # Streamlit app
+  copilot/       # LLM explanations grounded on the engine's numbers
   storage/       # multi-tenant, multi-site persistence
   engine.py      # orchestration facade used by api and dashboard
   datasets.py    # synthetic demo data
   config.py      # typed settings (pydantic-settings), env-driven
-examples/        # runnable end-to-end quickstart
+examples/        # runnable quickstart + real solar-data forecast
+docs/landing/    # static marketing landing page (index.html)
 tests/           # mirrors the package layout
+Dockerfile, docker-compose.yml, render.yaml, DEPLOY.md   # deployment
 ```
 
 ## Quickstart

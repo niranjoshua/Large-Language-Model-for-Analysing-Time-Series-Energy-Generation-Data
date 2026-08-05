@@ -24,6 +24,7 @@ service = ["fastapi>=0.111", "uvicorn>=0.30"]
 dashboard = ["streamlit>=1.36", "plotly>=5.22"]
 tracking = ["mlflow>=2.14"]
 weather = ["httpx>=0.27"]
+copilot = ["anthropic>=0.40"]
 
 [dependency-groups]
 dev = [
@@ -83,6 +84,7 @@ module = [
     "fastapi.*",
     "plotly.*",
     "uvicorn.*",
+    "anthropic.*",
 ]
 ignore_missing_imports = true
 
