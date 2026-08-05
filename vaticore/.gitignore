@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Environments
+.venv/
+venv/
+env/
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# uv
+# The lockfile SHOULD be committed. The virtualenv should not.
+
+# Secrets and local data. Never commit operator data or credentials.
+.env
+*.duckdb
+data/
+mlruns/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
