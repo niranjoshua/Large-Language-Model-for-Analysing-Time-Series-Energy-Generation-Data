@@ -33,13 +33,29 @@ from vaticore.schemas import GENERATION_KW, LOAD_KW, OPERATOR_ID, SITE_ID, TIMES
 if TYPE_CHECKING:
     from fastapi import FastAPI
 
+    from vaticore.storage import DuckDBRepository
+
 _VALID_TARGETS = {LOAD_KW, GENERATION_KW}
 
 
 @lru_cache(maxsize=1)
+def get_repository() -> DuckDBRepository:
+    """Cached repository, seeded with demo data if the store is empty.
+
+    Seeding means a fresh deployment is never blank. Replace the seed with a real
+    ingestion feed and this same store serves live operator data.
+    """
+    from vaticore.storage import get_repository as build_repository
+
+    repo = build_repository()
+    if repo.count() == 0:
+        repo.upsert(make_synthetic_fleet(days=90, seed=1))
+    return repo
+
+
 def get_fleet() -> pd.DataFrame:
-    """Data source dependency. Demo data today, a repository read tomorrow."""
-    return make_synthetic_fleet(days=90, seed=1)
+    """Data source dependency: read the full fleet from the repository."""
+    return get_repository().read_fleet()
 
 
 def create_app() -> FastAPI:

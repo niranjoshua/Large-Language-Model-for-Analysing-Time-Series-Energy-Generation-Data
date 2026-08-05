@@ -32,7 +32,11 @@ Working end to end, with a real forecasting model, an API and a dashboard.
 - **Ops**: Dockerfile, docker-compose (with TimescaleDB), and a Render blueprint
   (`DEPLOY.md`).
 
-Next: a persistent multi tenant store wired to the API, model tracking (MLflow),
+- **Storage**: a DuckDB repository (multi tenant, upsert, time-range reads) wired
+  into the API, which seeds demo data on first run and serves from the store.
+  `examples/ingest_csv.py` loads a real operator CSV into it.
+
+Next: a Postgres/TimescaleDB backend (same interface), model tracking (MLflow),
 and integrating weather features into the model. LSTM, TIME-LLM and an ensemble
 remain stubbed against the interface.
 
