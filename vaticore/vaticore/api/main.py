@@ -33,13 +33,13 @@ from vaticore.schemas import GENERATION_KW, LOAD_KW, OPERATOR_ID, SITE_ID, TIMES
 if TYPE_CHECKING:
     from fastapi import FastAPI
 
-    from vaticore.storage import DuckDBRepository
+    from vaticore.storage import TimeSeriesRepository
 
 _VALID_TARGETS = {LOAD_KW, GENERATION_KW}
 
 
 @lru_cache(maxsize=1)
-def get_repository() -> DuckDBRepository:
+def get_repository() -> TimeSeriesRepository:
     """Cached repository, seeded with demo data if the store is empty.
 
     Seeding means a fresh deployment is never blank. Replace the seed with a real

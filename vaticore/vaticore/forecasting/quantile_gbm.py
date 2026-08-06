@@ -1,22 +1,25 @@
 """Quantile gradient boosting forecaster: the workhorse model.
 
 One LightGBM regressor is trained per quantile with the quantile (pinball)
-objective, over calendar and lagged features engineered from a single site's
-history. Multi step forecasts are produced recursively: the median trajectory
-feeds the lag features forward, and every quantile model predicts its band
-around that trajectory at each step.
+objective, over calendar, lagged and optional exogenous features engineered from
+a single site's history. Multi step forecasts are produced recursively: the
+median trajectory feeds the lag features forward, and every quantile model
+predicts its band around that trajectory at each step.
+
+Exogenous covariates (weather) are contemporaneous: the weather at time t is a
+feature for the target at time t. Because weather forecasts for the horizon are
+available in production (and the true weather is available in a backtest), the
+model consumes future weather at prediction time through `future_exog`.
 
 Design choices, and why:
   - Per quantile models with the native quantile objective give genuine
     probabilistic output, which is what the product sells and what pinball loss
     rewards. Quantiles are sorted per row at the end so they never cross.
-  - Recursive multi horizon (rather than one model per horizon step) keeps the
-    model count small and the code simple, which matters more than a marginal
-    accuracy gain at this stage.
-  - Features are engineered from timestamp and target only, so the model works
-    inside the backtest harness, which passes just those two columns.
+  - Recursive multi horizon keeps the model count small and the code simple.
+  - Features are engineered from timestamp, target and named exogenous columns,
+    so the model works inside the backtest harness.
   - Training is deterministic (fixed seed, single threaded) so backtests and CI
-    are reproducible. Accuracy claims must be reproducible to be credible.
+    are reproducible.
 """
 
 from __future__ import annotations
@@ -69,30 +72,36 @@ def _calendar_row(ts: pd.Timestamp) -> dict[str, float]:
 
 
 class QuantileGBMForecaster(Forecaster):
-    """One LightGBM model per quantile over calendar and lag features."""
+    """One LightGBM model per quantile over calendar, lag and weather features."""
 
     def __init__(
         self,
         target: str,
         quantiles: tuple[float, ...] = DEFAULT_QUANTILES,
         lags: tuple[int, ...] = (1, 2, 3, 24, 48, 168),
+        exog_features: tuple[str, ...] = (),
     ) -> None:
         self.target = target
         self.quantiles = quantiles
         self.lags = tuple(sorted(lags))
+        self.exog_features = tuple(exog_features)
 
         self._models: dict[float, LGBMRegressor] = {}
         self._feature_names: list[str] = []
         self._freq: pd.Timedelta | None = None
         self._last_timestamp: pd.Timestamp | None = None
-        # Regular grid history, gap filled, for recursive lag lookups.
-        self._grid: pd.Series | None = None
+        # Regular grid history (target + exog), gap filled, for recursive lookups.
+        self._grid: pd.DataFrame | None = None
+        self._last_exog: dict[str, float] = {}
 
     # -- fitting -----------------------------------------------------------
 
     def fit(self, history: pd.DataFrame) -> QuantileGBMForecaster:
         if self.target not in history.columns:
             raise ValueError(f"target column {self.target!r} not present in history")
+        missing = [c for c in self.exog_features if c not in history.columns]
+        if missing:
+            raise ValueError(f"exogenous columns missing from history: {missing}")
 
         grid = self._to_regular_grid(history)
         self._grid = grid
@@ -117,39 +126,40 @@ class QuantileGBMForecaster(Forecaster):
             model = LGBMRegressor(objective="quantile", alpha=q, **_LGBM_PARAMS)
             model.fit(x, y)
             self._models[q] = model
+
+        # Last observed exogenous values, for fallback when future weather is absent.
+        if self.exog_features:
+            last = grid[list(self.exog_features)].ffill().iloc[-1]
+            self._last_exog = {c: float(last[c]) for c in self.exog_features}
         return self
 
-    def _to_regular_grid(self, history: pd.DataFrame) -> pd.Series:
-        """Reindex to a regular time grid so lags are well defined.
-
-        Gaps become NaN. A separate interpolated copy is used only for lag
-        lookups; training never invents target values.
-        """
-        series = (
-            history[[TIMESTAMP, self.target]]
+    def _to_regular_grid(self, history: pd.DataFrame) -> pd.DataFrame:
+        """Reindex target and exogenous columns to a regular time grid."""
+        cols = [self.target, *self.exog_features]
+        frame = (
+            history[[TIMESTAMP, *cols]]
             .dropna(subset=[TIMESTAMP])
             .drop_duplicates(subset=[TIMESTAMP])
             .sort_values(TIMESTAMP)
-            .set_index(TIMESTAMP)[self.target]
-            .astype(float)
+            .set_index(TIMESTAMP)
         )
-        if len(series) < 2:
+        if len(frame) < 2:
             raise InsufficientHistoryError("need at least two observations to infer spacing")
-        freq = pd.Timedelta(series.index.to_series().diff().dropna().median())
+        freq = pd.Timedelta(frame.index.to_series().diff().dropna().median())
         if freq <= pd.Timedelta(0):
             raise ValueError("non increasing timestamps in history")
-        grid_index = pd.date_range(series.index[0], series.index[-1], freq=freq, name=TIMESTAMP)
-        return series.reindex(grid_index)
+        grid_index = pd.date_range(frame.index[0], frame.index[-1], freq=freq, name=TIMESTAMP)
+        return frame.reindex(grid_index).astype(float)
 
-    def _build_training_frame(self, grid: pd.Series) -> pd.DataFrame:
-        cal = pd.DataFrame(
-            [_calendar_row(ts) for ts in grid.index],
-            index=grid.index,
-        )
+    def _build_training_frame(self, grid: pd.DataFrame) -> pd.DataFrame:
+        target_series = grid[self.target]
+        cal = pd.DataFrame([_calendar_row(ts) for ts in grid.index], index=grid.index)
         frame = cal.copy()
         for lag in self.lags:
-            frame[f"lag{lag}"] = grid.shift(lag).to_numpy()
-        frame[self.target] = grid.to_numpy()
+            frame[f"lag{lag}"] = target_series.shift(lag).to_numpy()
+        for col in self.exog_features:
+            frame[col] = grid[col].to_numpy()
+        frame[self.target] = target_series.to_numpy()
         return frame
 
     # -- prediction --------------------------------------------------------
@@ -158,6 +168,7 @@ class QuantileGBMForecaster(Forecaster):
         self,
         horizon: int,
         quantiles: tuple[float, ...] = DEFAULT_QUANTILES,
+        future_exog: pd.DataFrame | None = None,
     ) -> pd.DataFrame:
         if not self._models or self._grid is None or self._freq is None:
             raise NotFittedError("call fit before predict_quantiles")
@@ -174,11 +185,12 @@ class QuantileGBMForecaster(Forecaster):
             freq=self._freq,
             name=TIMESTAMP,
         )
+        exog_lookup = self._exog_lookup(future_exog)
 
-        # Known trajectory for lag lookups: interpolated history, extended with
-        # the median forecast as we roll forward.
-        known = self._grid.interpolate(limit_direction="both")
-        known = known.fillna(float(np.nanmean(self._grid.to_numpy())))
+        # Known target trajectory for lag lookups: interpolated history, extended
+        # with the median forecast as we roll forward.
+        known = self._grid[self.target].interpolate(limit_direction="both")
+        known = known.fillna(float(np.nanmean(self._grid[self.target].to_numpy())))
         trajectory: dict[pd.Timestamp, float] = dict(
             zip(known.index, known.to_numpy(), strict=True)
         )
@@ -190,11 +202,12 @@ class QuantileGBMForecaster(Forecaster):
             for lag in self.lags:
                 ref = ts - lag * self._freq
                 feats[f"lag{lag}"] = trajectory.get(ref, known.iloc[-1])
+            for col in self.exog_features:
+                feats[col] = exog_lookup(col, ts)
             x = pd.DataFrame([feats])[self._feature_names]
 
             row = {quantile_column(q): float(self._models[q].predict(x)[0]) for q in quantiles}
             rows.append(row)
-            # Feed the median forecast forward for future lags.
             trajectory[ts] = float(self._models[median_q].predict(x)[0])
 
         forecast = pd.DataFrame(rows, index=index)
@@ -202,3 +215,25 @@ class QuantileGBMForecaster(Forecaster):
         # Enforce non crossing quantiles row by row.
         forecast.loc[:, :] = np.sort(forecast.to_numpy(), axis=1)
         return forecast
+
+    def _exog_lookup(self, future_exog: pd.DataFrame | None):  # type: ignore[no-untyped-def]
+        """Return a function (column, timestamp) -> value for exogenous features.
+
+        Uses supplied future weather when available, else the last observed value
+        (forward filled), so a missing forecast degrades gracefully rather than
+        failing.
+        """
+        table: dict[pd.Timestamp, dict[str, float]] = {}
+        if future_exog is not None and self.exog_features and TIMESTAMP in future_exog.columns:
+            cols = [c for c in self.exog_features if c in future_exog.columns]
+            stamps = pd.DatetimeIndex(future_exog[TIMESTAMP])
+            for i, ts in enumerate(stamps):
+                table[ts] = {c: float(future_exog.iloc[i][c]) for c in cols}
+
+        def lookup(column: str, ts: pd.Timestamp) -> float:
+            row = table.get(ts)
+            if row is not None and column in row and not np.isnan(row[column]):
+                return row[column]
+            return self._last_exog.get(column, 0.0)
+
+        return lookup

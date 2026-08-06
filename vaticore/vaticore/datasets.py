@@ -32,6 +32,7 @@ def make_synthetic_site(
     base_load_kw: float = 120.0,
     solar_peak_kw: float = 90.0,
     gap_fraction: float = 0.01,
+    with_weather: bool = False,
 ) -> pd.DataFrame:
     """Generate one site of hourly load and solar generation.
 
@@ -40,6 +41,11 @@ def make_synthetic_site(
     gap_fraction:
         Fraction of rows to blank out as missing, so ingestion and models are
         exercised against gaps rather than perfect data.
+    with_weather:
+        If True, also emit shortwave_radiation, cloud_cover and temperature_2m
+        columns that genuinely drive generation, so weather features can be shown
+        to improve the forecast. Weather columns are complete (no gaps), like a
+        real external feed.
     """
     rng = np.random.default_rng(seed)
     n = days * 24
@@ -71,6 +77,13 @@ def make_synthetic_site(
             GENERATION_KW: generation,
         }
     )
+
+    if with_weather:
+        # Weather that actually drives the series: radiation tracks generation,
+        # cloud cover is its inverse, temperature follows a daily cycle.
+        frame["shortwave_radiation"] = daylight * cloud * 1000.0
+        frame["cloud_cover"] = (1.0 - cloud) * 100.0
+        frame["temperature_2m"] = 24.0 + 6.0 * daily + rng.normal(0.0, 0.5, n)
 
     if gap_fraction > 0:
         n_gaps = int(n * gap_fraction)

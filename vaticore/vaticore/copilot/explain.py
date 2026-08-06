@@ -74,8 +74,9 @@ def _llm_explanation(advisory: Advisory, api_key: str, model: str) -> str:
         system=_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": _facts(advisory)}],
     )
-    parts = [block.text for block in message.content if getattr(block, "type", None) == "text"]
-    text = " ".join(parts).strip()
+    # Content is a union of block types; pull text off text blocks defensively.
+    parts = [getattr(block, "text", "") for block in message.content]
+    text = " ".join(p for p in parts if p).strip()
     if not text:
         raise ValueError("empty LLM response")
     return text

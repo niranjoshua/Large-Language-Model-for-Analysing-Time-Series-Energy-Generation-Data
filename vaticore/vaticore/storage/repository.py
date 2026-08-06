@@ -1,8 +1,9 @@
-"""Persistence interface, scoped by operator and site from day one.
+"""The storage contract, scoped by operator and site from day one.
 
 Retrofitting tenant scoping later is painful, so every read and write takes an
-operator_id and site_id here at the interface, even before a concrete backend
-(DuckDB locally, Postgres/TimescaleDB in production) is wired in.
+operator_id and site_id here at the interface. Both the DuckDB and the
+Postgres/TimescaleDB backends implement this Protocol, so callers depend on the
+contract, never on a concrete store.
 """
 
 from __future__ import annotations
@@ -27,4 +28,20 @@ class TimeSeriesRepository(Protocol):
         end: pd.Timestamp | None = None,
     ) -> pd.DataFrame:
         """Return one site's validated history within an optional time range."""
+        ...
+
+    def read_fleet(self) -> pd.DataFrame:
+        """Return all stored observations across every operator and site."""
+        ...
+
+    def list_sites(self) -> pd.DataFrame:
+        """Summarise stored sites: row count and time span per operator/site."""
+        ...
+
+    def count(self) -> int:
+        """Total number of stored observations."""
+        ...
+
+    def close(self) -> None:
+        """Release the underlying connection."""
         ...

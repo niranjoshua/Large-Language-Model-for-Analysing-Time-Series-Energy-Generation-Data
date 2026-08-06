@@ -69,17 +69,30 @@ def run_backtest(
     step: int | None = None,
     model: str = "quantile_gbm",
     quantiles: tuple[float, ...] = DEFAULT_QUANTILES,
+    exog: tuple[str, ...] = (),
 ) -> BacktestResult:
-    """Backtest a model against persistence on one site."""
+    """Backtest a model against persistence on one site.
+
+    When exog columns are given and the model is quantile_gbm, the candidate is
+    built with those exogenous (weather) features and receives the test window's
+    values as future_exog, mirroring having a weather forecast in production.
+    """
+
+    def make_model() -> Forecaster:
+        if model == "quantile_gbm" and exog:
+            return QuantileGBMForecaster(target=target, quantiles=quantiles, exog_features=exog)
+        return _build(model, target, quantiles)
+
     return backtest_site(
         history,
         target=target,
-        make_model=lambda: _build(model, target, quantiles),
+        make_model=make_model,
         horizon=horizon,
         initial=initial,
         step=step,
         quantiles=quantiles,
         model_name=model,
+        exog=exog,
     )
 
 

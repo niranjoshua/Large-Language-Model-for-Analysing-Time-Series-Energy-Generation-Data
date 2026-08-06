@@ -77,6 +77,13 @@ def test_path_parsing() -> None:
 def test_factory_rejects_unknown_scheme() -> None:
     from vaticore.config import Settings
 
-    settings = Settings(database_url="postgresql://localhost/db")
-    with pytest.raises(NotImplementedError, match="not supported yet"):
+    settings = Settings(database_url="mysql://localhost/db")
+    with pytest.raises(ValueError, match="unsupported database_url scheme"):
         get_repository(settings)
+
+
+def test_factory_builds_duckdb() -> None:
+    from vaticore.config import Settings
+
+    repo = get_repository(Settings(database_url="duckdb:///:memory:"))
+    assert isinstance(repo, DuckDBRepository)

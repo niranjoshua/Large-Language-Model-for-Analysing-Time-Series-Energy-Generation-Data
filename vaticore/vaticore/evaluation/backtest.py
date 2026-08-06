@@ -11,6 +11,7 @@ built on top of this, never by assuming a single site inside the harness.
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
@@ -80,6 +81,7 @@ def backtest_site(
     step: int | None = None,
     quantiles: tuple[float, ...] = DEFAULT_QUANTILES,
     model_name: str = "candidate",
+    exog: tuple[str, ...] = (),
 ) -> BacktestResult:
     """Backtest one candidate model against persistence on a single site.
 
@@ -97,14 +99,15 @@ def backtest_site(
     step:
         Rows to advance the origin between folds. Defaults to horizon
         (non overlapping test windows).
+    exog:
+        Exogenous feature columns (for example weather) to carry through. The
+        candidate receives the test window's exogenous values as future_exog,
+        mirroring having a weather forecast in production. The baseline ignores
+        them.
     """
     step = step or horizon
-    data = (
-        history[[TIMESTAMP, target]]
-        .dropna(subset=[TIMESTAMP])
-        .sort_values(TIMESTAMP)
-        .reset_index(drop=True)
-    )
+    columns = [TIMESTAMP, target, *exog]
+    data = history[columns].dropna(subset=[TIMESTAMP]).sort_values(TIMESTAMP).reset_index(drop=True)
     origins = _rolling_origins(len(data), initial=initial, horizon=horizon, step=step)
     if not origins:
         raise ValueError(
@@ -118,8 +121,11 @@ def backtest_site(
         train = data.iloc[:cutoff]
         test = data.iloc[cutoff : cutoff + horizon]
         actual = test[target].to_numpy(dtype=float)
+        future_exog = test[[TIMESTAMP, *exog]] if exog else None
 
-        candidate = _score_one(make_model(), model_name, fold, train, actual, horizon, quantiles)
+        candidate = _score_one(
+            make_model(), model_name, fold, train, actual, horizon, quantiles, future_exog
+        )
         baseline = _score_one(
             PersistenceForecaster(target=target),
             "persistence",
@@ -128,6 +134,7 @@ def backtest_site(
             actual,
             horizon,
             quantiles,
+            None,
         )
         result.folds.extend([candidate, baseline])
 
@@ -142,9 +149,19 @@ def _score_one(
     actual: np.ndarray,
     horizon: int,
     quantiles: tuple[float, ...],
+    future_exog: pd.DataFrame | None = None,
 ) -> FoldMetrics:
     model.fit(train)
-    forecast = model.predict_quantiles(horizon=horizon, quantiles=quantiles)
+    # Pass future_exog only to models whose predict supports it (the GBM does).
+    supports_exog = "future_exog" in inspect.signature(model.predict_quantiles).parameters
+    if future_exog is not None and supports_exog:
+        forecast = model.predict_quantiles(
+            horizon=horizon,
+            quantiles=quantiles,
+            future_exog=future_exog,  # type: ignore[call-arg]
+        )
+    else:
+        forecast = model.predict_quantiles(horizon=horizon, quantiles=quantiles)
 
     by_quantile = {q: forecast[quantile_column(q)].to_numpy(dtype=float) for q in quantiles}
     median_q = min(quantiles, key=lambda q: abs(q - 0.5))
